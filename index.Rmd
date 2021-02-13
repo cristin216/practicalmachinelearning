@@ -3,7 +3,9 @@ title: "Are You Lifting Correctly?"
 subtitle: "Course Project for Practical Machine Learning"
 author: "C. Kalinowski"
 date: "2/8/2021"
-output: html_document
+output: 
+  html_document: 
+    keep_md: yes
 ---
 
 ```{r setup, include=FALSE}
