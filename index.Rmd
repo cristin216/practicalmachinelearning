@@ -1,0 +1,102 @@
+---
+title: "Are You Lifting Correctly?"
+subtitle: "Course Project for Practical Machine Learning"
+author: "C. Kalinowski"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(plyr)
+library(ggplot2)
+library(rattle)
+```
+
+
+The data provided for this project include a large set of measurements taken during both correct and a variety of specifically incorrect demonstrations of weight-lifting exercises. The goal is to predict which demonstration class a specific weight-lifting event belongs to based on the measurements provided.
+
+## Split Data
+
+
+The data in this set is rather large, consisting in close to 20,000 rows, so it can easily be split into training, testing, and validation sets, using 60%, 20%, and 20% of the data, respectively. Our testing set is then set aside for final testing purposes, and the validation set is set aside for validation of potentially useful models. Here the row counts are indicated for each of the three sets. 
+
+```{R, cache=TRUE}
+## cell values that are "#DIV/0!" are loaded as na values
+data<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",na.strings=c("#DIV/0!","","NA"))
+set.seed(12015)
+inTrain<-createDataPartition(y=data$classe,p=0.8,list=FALSE)
+trainset<-data[inTrain,]
+testing<-data[-inTrain,]
+inTraining<-createDataPartition(y=trainset$classe,p=0.75,list=FALSE)
+training<-trainset[inTraining,]
+validation<-trainset[-inTraining,]
+nrow(training)
+nrow(validation)
+nrow(testing)
+
+```
+
+## Pick Features
+
+A first glance at the training set indicated that several of the columns had a large number of missing values. A count of these values showed that each variable either had more than 11,000 missing values or had no missing values. 
+
+```{R, cache=TRUE}
+
+na_count <-sapply(training, function(y) sum(length(which(is.na(y)))))
+na_count <- data.frame(na_count)
+hinas<-which(na_count>10000)
+training<-training[,-hinas]
+training<-training[,-c(1:7)]
+```
+
+With a total count of `r nrow(training)` in this data set, this indicates that more than 98% of the cases in this set are missing a value for these particular variables, making said variables unfit to be relevant to our potential model. As a result, these `r length(hinas)` variables were removed from the training set. Additionally, the first seven columns of the set indicate specific information about the particular trial, indicating the user, the time stamp, the trial number, etc., none of which are data that should be considered as relevant prediction variables. These were also removed, reducing the training set from `r ncol(data)-1` to `r ncol(training)-1` potential predictor variables.
+
+## Pick Prediction Function
+
+The variable that we are trying to predict indicates one of five possible ways to either correctly or incorrectly perform a specific weightlifting exercise. Class A is the correct way to do the exercise and classes B, C, D, and E are specific incorrect ways to do it. As such, the prediction function is a classification task, and the most appropriate model is likely a tree. One model was created with the "rpart" method and a second model with the random forest ("rf") method.
+
+
+```{R, cache=TRUE}
+rpmod<-train(factor(classe)~.,data=training,method="rpart")
+print(rpmod$finalModel)
+fancyRpartPlot(rpmod$finalModel,main="rpart model")
+
+rfmod<-train(factor(classe)~.,data=training,method="rf",prox=TRUE)
+rfmod
+plot(rfmod, type="l", main="random forest model")
+
+```
+
+
+## Apply to Validation and Refine
+
+When the two models were applied to the validation set, the rpart model performed significantly worse than the random forest model, as seen in the confusion matrices below.
+
+```{R, cache=TRUE}
+## subset validation set the way the training set was done
+validationset<-validation[,-hinas]
+validationset<-validationset[,-c(1:7)]
+
+## rpart model
+rppred<-predict(rpmod,newdata=validationset)
+confusionMatrix(rppred,factor(validationset$classe)) 
+
+## random forest model
+rfpred<-predict(rfmod,newdata=validationset)
+confusionMatrix(rfpred,factor(validationset$classe))
+```
+
+As a result, we selected the random forest model to use on our test set.
+
+## Apply to Test Set
+
+```{R, cache=TRUE}
+testset<-testing[,-hinas]
+testset<-testset[,-c(1:7)]
+testpred<-predict(rfmod,newdata=testset)
+confusionMatrix(testpred,factor(testset$classe))
+```
+
+The out-of-sample error rate is expected to be around 99%, since both the validation and test set error rates are slightly above 99%.
